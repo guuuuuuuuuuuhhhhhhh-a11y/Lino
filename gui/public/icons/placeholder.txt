@@ -1,0 +1,15 @@
+Place SVG icons named by distro id here, e.g.
+- ubuntu.svg
+- debian.svg
+- fedora.svg
+- alpine.svg
+- arch.svg
+- kali.svg
+- parrot.svg
+- opensuse.svg
+- rocky.svg
+- alma.svg
+- oraclelinux.svg
+- gentoo.svg
+- void.svg
+- linux.svg (fallback)

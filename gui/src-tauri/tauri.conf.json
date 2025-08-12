@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Linux Distro Manager",
+  "version": "0.1.0",
+  "identifier": "com.example.ldm",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../gui/dist"
+  },
+  "app": {
+    "windows": [
+      { "title": "Linux Distro Manager", "width": 1200, "height": 800 }
+    ]
+  }
+}
