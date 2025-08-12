@@ -6,5 +6,6 @@ pub mod backends;
 pub mod env_manager;
 pub mod updates;
 pub mod models;
+pub mod install;
 
 pub use models::*;

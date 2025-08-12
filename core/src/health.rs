@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use sysinfo::{Disks, System};
+use sysinfo::Disks;
 use which::which;
 use std::path::Path;
 
@@ -13,9 +13,10 @@ pub fn check_disk_space(path: &Path, required_bytes: u64) -> Result<()> {
     let disks = Disks::new_with_refreshed_list();
     let path_str = path.to_string_lossy();
     let disk = disks.iter().find(|d| path_str.starts_with(d.mount_point().to_string_lossy().as_ref()));
-    let Some(disk) = disk else { return Ok(()); };
-    let available = disk.available_space();
-    anyhow::ensure!(available >= required_bytes, "Insufficient disk space. Available: {} bytes, required: {} bytes", available, required_bytes);
+    if let Some(disk) = disk {
+        let available = disk.available_space();
+        anyhow::ensure!(available >= required_bytes, "Insufficient disk space. Available: {} bytes, required: {} bytes", available, required_bytes);
+    }
     Ok(())
 }
 

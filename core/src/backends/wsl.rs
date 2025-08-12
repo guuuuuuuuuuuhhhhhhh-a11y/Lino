@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use crate::models::{BackendKind, InstalledEnv};
-use super::Backend;
+use super::{Backend, InstallSpec};
 
 pub struct WslBackend;
 
@@ -12,24 +12,23 @@ impl Backend for WslBackend {
         {
             let out = std::process::Command::new("wsl.exe").args(["-l", "-v"]).output()?;
             anyhow::ensure!(out.status.success(), "wsl -l -v failed");
-            let _text = String::from_utf8_lossy(&out.stdout);
-            // TODO: parse output into InstalledEnv entries with best effort
         }
         Ok(vec![])
     }
 
-    fn install(&self, env: &InstalledEnv, artifact_path: &std::path::Path) -> Result<()> {
+    fn install(&self, env: &InstalledEnv, spec: InstallSpec) -> Result<()> {
         #[cfg(windows)]
         {
+            let rootfs = spec.rootfs_path.ok_or_else(|| anyhow!("rootfs path not provided"))?;
             let install_dir = env.install_dir.clone().unwrap_or_else(|| format!("C:\\WSL\\{}", env.name));
             let status = std::process::Command::new("wsl.exe")
-                .args(["--import", &env.name, &install_dir, &artifact_path.to_string_lossy(), "--version", "2"]) 
+                .args(["--import", &env.name, &install_dir, &rootfs.to_string_lossy(), "--version", "2"]) 
                 .status()?;
             anyhow::ensure!(status.success(), "WSL import failed");
         }
         #[cfg(not(windows))]
         {
-            let _ = (env, artifact_path);
+            let _ = (env, spec);
             return Err(anyhow!("WSL backend is only available on Windows"));
         }
         Ok(())

@@ -1,9 +1,10 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use ldm_core::{self as core, distro_registry, models::*, env_manager};
-use ldm_core::backends::Backend;
+use ldm_core::backends::{Backend, InstallSpec};
 use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
+use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(Parser, Debug)]
 #[command(name = "ldm", version, about = "Linux Distro Manager")]
@@ -25,6 +26,8 @@ enum Commands {
     Start { name: String },
     Stop { name: String },
     Remove { name: String },
+    Snapshot { name: String, #[arg(long)] output: PathBuf },
+    Restore { name: String, #[arg(long)] input: PathBuf, #[arg(long)] backend: BackendOpt, #[arg(long)] location: Option<PathBuf> },
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -52,16 +55,35 @@ async fn main() -> Result<()> {
             for v in distro_registry::get_versions(d) { println!("{}\t{}", v.version, v.channel.as_deref().unwrap_or("")); }
         }
         Commands::Install { distro_id, version, backend, name, location, verify: _ } => {
-            // Minimal: record env and call backend install (image pull/WSL import to be refined per artifact)
-            let env = InstalledEnv { name: name.clone(), distro_id, version, backend: match backend { BackendOpt::Wsl => BackendKind::Wsl, BackendOpt::Docker => BackendKind::Docker }, install_dir: location.map(|p| p.to_string_lossy().to_string()) };
+            let idx = load_index(cli.registry).await?;
+            let d = distro_registry::get_distro(&idx, &distro_id).expect("distro not found");
+            let ver = distro_registry::get_version(d, &version).expect("version not found");
+            let backend_kind = match backend { BackendOpt::Wsl => BackendKind::Wsl, BackendOpt::Docker => BackendKind::Docker };
+            let artifact = core::install::pick_artifact(ver, backend_kind.clone()).expect("artifact not found");
+
+            let env = InstalledEnv { name: name.clone(), distro_id: d.id.clone(), version: version.clone(), backend: backend_kind.clone(), install_dir: location.map(|p| p.to_string_lossy().to_string()) };
+
+            let spec = match artifact {
+                Artifact::DockerImage { image } => InstallSpec { docker_image: Some(image.clone()), rootfs_path: None },
+                Artifact::Rootfs { .. } => {
+                    let pb = ProgressBar::new(0);
+                    pb.set_style(ProgressStyle::with_template("{msg} {bar:40.cyan/blue} {bytes}/{total_bytes} ({eta})").unwrap());
+                    pb.set_message("Downloading rootfs:");
+                    let tmpdir = std::env::temp_dir().join("ldm"); std::fs::create_dir_all(&tmpdir).ok();
+                    let pb2 = pb.clone();
+                    let spec = core::install::prepare_for_backend(artifact, &tmpdir, move |dl, total| {
+                        if let Some(t) = total { pb2.set_length(t); }
+                        pb2.set_position(dl);
+                    }).await?;
+                    pb.finish_with_message("Download complete");
+                    spec
+                }
+            };
+
             env_manager::add(env.clone())?;
-            match backend {
-                BackendOpt::Docker => {
-                    let be = core::backends::docker::DockerBackend; be.install(&env, std::path::Path::new(""))?;
-                }
-                BackendOpt::Wsl => {
-                    let be = core::backends::wsl::WslBackend; be.install(&env, std::path::Path::new("<rootfs.tar.gz>"))?; // placeholder
-                }
+            match backend_kind {
+                BackendKind::Docker => { let be = core::backends::docker::DockerBackend; be.install(&env, spec)?; }
+                BackendKind::Wsl => { let be = core::backends::wsl::WslBackend; be.install(&env, spec)?; }
             }
             println!("installed {}", name);
         }
@@ -94,6 +116,46 @@ async fn main() -> Result<()> {
             }
             ldm_core::env_manager::remove(&name)?;
             println!("removed {}", name);
+        }
+        Commands::Snapshot { name, output } => {
+            let envs = env_manager::list()?;
+            let env = envs.iter().find(|e| e.name == name).expect("env not found");
+            match env.backend {
+                BackendKind::Docker => {
+                    // docker commit + save
+                    let image = format!("ldm-snap-{}:latest", name);
+                    std::process::Command::new("docker").args(["commit", &name, &image]).status()?;
+                    std::process::Command::new("docker").args(["save", "-o"]).arg(&output).arg(&image).status()?;
+                }
+                BackendKind::Wsl => {
+                    #[cfg(windows)] {
+                        std::process::Command::new("wsl.exe").args(["--export", &name, &output.to_string_lossy()]).status()?;
+                    }
+                    #[cfg(not(windows))] { anyhow::bail!("WSL snapshot only on Windows"); }
+                }
+            }
+            println!("snapshot saved to {}", output.display());
+        }
+        Commands::Restore { name, input, backend, location } => {
+            let backend_kind = match backend { BackendOpt::Wsl => BackendKind::Wsl, BackendOpt::Docker => BackendKind::Docker };
+            let env = InstalledEnv { name: name.clone(), distro_id: "restored".into(), version: "restored".into(), backend: backend_kind.clone(), install_dir: location.map(|p| p.to_string_lossy().to_string()) };
+            match backend_kind {
+                BackendKind::Docker => {
+                    // docker load, then run
+                    std::process::Command::new("docker").args(["load", "-i"]).arg(&input).status()?;
+                    // user should provide image name; for simplicity assume archive contains one image tagged ldm-snap-<name>:latest
+                    let image = format!("ldm-snap-{}:latest", name);
+                    let be = core::backends::docker::DockerBackend; be.install(&env, InstallSpec { docker_image: Some(image), rootfs_path: None })?;
+                }
+                BackendKind::Wsl => {
+                    #[cfg(windows)] {
+                        let be = core::backends::wsl::WslBackend; be.install(&env, InstallSpec { docker_image: None, rootfs_path: Some(input.clone()) })?;
+                    }
+                    #[cfg(not(windows))] { anyhow::bail!("WSL restore only on Windows"); }
+                }
+            }
+            env_manager::add(env)?;
+            println!("restored {}", name);
         }
     }
 

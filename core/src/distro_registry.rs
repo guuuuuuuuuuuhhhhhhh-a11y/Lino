@@ -19,3 +19,7 @@ pub fn get_distro<'a>(index: &'a DistributionsIndex, id: &str) -> Option<&'a Dis
 pub fn get_versions(distro: &Distro) -> Vec<&DistroVersion> {
     distro.versions.iter().collect()
 }
+
+pub fn get_version<'a>(distro: &'a Distro, version: &str) -> Option<&'a DistroVersion> {
+    distro.versions.iter().find(|v| v.version == version)
+}

@@ -23,6 +23,7 @@ dirs = { workspace = true }
 chrono = { workspace = true }
 hex = { workspace = true }
 futures-util = { workspace = true }
+flate2 = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

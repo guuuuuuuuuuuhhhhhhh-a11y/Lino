@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
-use bytes::Bytes;
 use reqwest::header::{HeaderMap, RANGE};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tokio::io::AsyncWriteExt;
 use futures_util::StreamExt as _;
 
