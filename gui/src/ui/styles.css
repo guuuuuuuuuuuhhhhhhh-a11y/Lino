@@ -20,3 +20,6 @@ body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter,
 .btn-row { display: flex; gap: 8px }
 button { background: #27355d; color: var(--text); border: 1px solid #2a3861; padding: 8px 12px; border-radius: 8px }
 button:hover { background: #2f3e6b }
+.banner { position: sticky; top: 52px; z-index: 10; background: #10183a; border: 1px solid #2a3861; margin: 12px 0; padding: 10px 12px; border-radius: 10px }
+.bar { height: 8px; background: #1a2546; border-radius: 6px; overflow: hidden; margin-top: 8px }
+.fill { height: 100%; background: linear-gradient(90deg, #6dd3fb, #66ffa1); width: 0 }
