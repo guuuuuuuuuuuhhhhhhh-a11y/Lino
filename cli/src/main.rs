@@ -54,38 +54,8 @@ async fn main() -> Result<()> {
             let d = distro_registry::get_distro(&idx, &distro_id).expect("distro not found");
             for v in distro_registry::get_versions(d) { println!("{}\t{}", v.version, v.channel.as_deref().unwrap_or("")); }
         }
-        Commands::Install { distro_id, version, backend, name, location, verify: _ } => {
-            let idx = load_index(cli.registry).await?;
-            let d = distro_registry::get_distro(&idx, &distro_id).expect("distro not found");
-            let ver = distro_registry::get_version(d, &version).expect("version not found");
-            let backend_kind = match backend { BackendOpt::Wsl => BackendKind::Wsl, BackendOpt::Docker => BackendKind::Docker };
-            let artifact = core::install::pick_artifact(ver, backend_kind.clone()).expect("artifact not found");
-
-            let env = InstalledEnv { name: name.clone(), distro_id: d.id.clone(), version: version.clone(), backend: backend_kind.clone(), install_dir: location.map(|p| p.to_string_lossy().to_string()) };
-
-            let spec = match artifact {
-                Artifact::DockerImage { image } => InstallSpec { docker_image: Some(image.clone()), rootfs_path: None },
-                Artifact::Rootfs { .. } => {
-                    let pb = ProgressBar::new(0);
-                    pb.set_style(ProgressStyle::with_template("{msg} {bar:40.cyan/blue} {bytes}/{total_bytes} ({eta})").unwrap());
-                    pb.set_message("Downloading rootfs:");
-                    let tmpdir = std::env::temp_dir().join("ldm"); std::fs::create_dir_all(&tmpdir).ok();
-                    let pb2 = pb.clone();
-                    let spec = core::install::prepare_for_backend(artifact, &tmpdir, move |dl, total| {
-                        if let Some(t) = total { pb2.set_length(t); }
-                        pb2.set_position(dl);
-                    }).await?;
-                    pb.finish_with_message("Download complete");
-                    spec
-                }
-            };
-
-            env_manager::add(env.clone())?;
-            match backend_kind {
-                BackendKind::Docker => { let be = core::backends::docker::DockerBackend; be.install(&env, spec)?; }
-                BackendKind::Wsl => { let be = core::backends::wsl::WslBackend; be.install(&env, spec)?; }
-            }
-            println!("installed {}", name);
+        Commands::Install { .. } => {
+            eprintln!("This operation is available only from the GUI. Please install via the Tauri app.");
         }
         Commands::List => {
             for e in env_manager::list()? { println!("{}\t{:?}\t{} {}", e.name, e.backend, e.distro_id, e.version); }
@@ -117,45 +87,11 @@ async fn main() -> Result<()> {
             ldm_core::env_manager::remove(&name)?;
             println!("removed {}", name);
         }
-        Commands::Snapshot { name, output } => {
-            let envs = env_manager::list()?;
-            let env = envs.iter().find(|e| e.name == name).expect("env not found");
-            match env.backend {
-                BackendKind::Docker => {
-                    // docker commit + save
-                    let image = format!("ldm-snap-{}:latest", name);
-                    std::process::Command::new("docker").args(["commit", &name, &image]).status()?;
-                    std::process::Command::new("docker").args(["save", "-o"]).arg(&output).arg(&image).status()?;
-                }
-                BackendKind::Wsl => {
-                    #[cfg(windows)] {
-                        std::process::Command::new("wsl.exe").args(["--export", &name, &output.to_string_lossy()]).status()?;
-                    }
-                    #[cfg(not(windows))] { anyhow::bail!("WSL snapshot only on Windows"); }
-                }
-            }
-            println!("snapshot saved to {}", output.display());
+        Commands::Snapshot { .. } => {
+            eprintln!("This operation is available only from the GUI. Please use the Tauri app.");
         }
-        Commands::Restore { name, input, backend, location } => {
-            let backend_kind = match backend { BackendOpt::Wsl => BackendKind::Wsl, BackendOpt::Docker => BackendKind::Docker };
-            let env = InstalledEnv { name: name.clone(), distro_id: "restored".into(), version: "restored".into(), backend: backend_kind.clone(), install_dir: location.map(|p| p.to_string_lossy().to_string()) };
-            match backend_kind {
-                BackendKind::Docker => {
-                    // docker load, then run
-                    std::process::Command::new("docker").args(["load", "-i"]).arg(&input).status()?;
-                    // user should provide image name; for simplicity assume archive contains one image tagged ldm-snap-<name>:latest
-                    let image = format!("ldm-snap-{}:latest", name);
-                    let be = core::backends::docker::DockerBackend; be.install(&env, InstallSpec { docker_image: Some(image), rootfs_path: None })?;
-                }
-                BackendKind::Wsl => {
-                    #[cfg(windows)] {
-                        let be = core::backends::wsl::WslBackend; be.install(&env, InstallSpec { docker_image: None, rootfs_path: Some(input.clone()) })?;
-                    }
-                    #[cfg(not(windows))] { anyhow::bail!("WSL restore only on Windows"); }
-                }
-            }
-            env_manager::add(env)?;
-            println!("restored {}", name);
+        Commands::Restore { .. } => {
+            eprintln!("This operation is available only from the GUI. Please use the Tauri app.");
         }
     }
 

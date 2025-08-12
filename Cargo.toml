@@ -1,9 +1,15 @@
 [workspace]
 members = [
   "core",
-  "cli"
+  "cli",
+  "gui/src-tauri"
 ]
 resolver = "2"
+
+default-members = [
+  "core",
+  "cli"
+]
 
 [workspace.package]
 edition = "2021"
