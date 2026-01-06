@@ -14,6 +14,7 @@ jobs:
     steps:
       - name: Update system & install deps
         run: |
+          sudo su 
           sudo apt update
           sudo apt install -y wget tar build-essential cmake libuv1-dev libssl-dev libhwloc-dev
 
